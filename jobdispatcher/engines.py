@@ -104,9 +104,7 @@ class ThreadingEngine(Engine):
             os.environ["OMP_NUM_THREADS"] = str(cores)  # set maximum cores per job
 
             logger.debug(f"Starting job {job_name}")
-            result: object = user_function(
-                *args, **kwargs
-            )  # run function and catch output
+            result: object = user_function(*args, **kwargs)  # run function and catch output
             self._results[job_name] = result
             finished_job = self._running_jobs.pop(job_id)
             self._completed_jobs[job_id] = finished_job
@@ -203,9 +201,16 @@ class MultiprocessingEngine(Engine):
             os.environ["OMP_NUM_THREADS"] = str(cores)  # set maximum cores per job
 
             logger.debug(f"Starting job {job_name}")
-            result: object = user_function(
-                *args, **kwargs
-            )  # run function and catch output
+            try:
+                result: object = user_function(*args, **kwargs)  # run function and catch output
+            except Exception as e:
+                results.put_nowait((job_name, job_id, "Failed"))
+
+                with resource_available:
+                    resource_available.notify()
+
+                raise RuntimeError(f"Job {job_name} failed during runtime\n" + str(e))
+
             results.put_nowait((job_name, job_id, result))
 
             with resource_available:
